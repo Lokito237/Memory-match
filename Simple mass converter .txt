@@ -1,0 +1,96 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mass Converter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      text-align: center;
+      padding-top: 40px;
+    }
+    .box {
+      background: white;
+      width: 320px;
+      margin: auto;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 6px #aaa;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 8px;
+      margin: 8px 0;
+      font-size: 16px;
+    }
+    button {
+      background: #2d6cdf;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    #result {
+      margin-top: 15px;
+      font-size: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Mass Converter</h2>
+
+    <input type="number" id="amount" placeholder="Enter a number">
+
+    <select id="fromUnit">
+      <option value="kg">Kilograms</option>
+      <option value="g">Grams</option>
+      <option value="mg">Milligrams</option>
+      <option value="lb">Pounds</option>
+      <option value="oz">Ounces</option>
+    </select>
+
+    <select id="toUnit">
+      <option value="lb">Pounds</option>
+      <option value="kg">Kilograms</option>
+      <option value="g">Grams</option>
+      <option value="mg">Milligrams</option>
+      <option value="oz">Ounces</option>
+    </select>
+
+    <button onclick="convert()">Convert</button>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    // how many kilograms are in one of each unit
+    var toKg = {
+      kg: 1,
+      g: 0.001,
+      mg: 0.000001,
+      lb: 0.453592,
+      oz: 0.0283495
+    };
+
+    function convert() {
+      var amount = parseFloat(document.getElementById("amount").value);
+      var from = document.getElementById("fromUnit").value;
+      var to = document.getElementById("toUnit").value;
+      var result = document.getElementById("result");
+
+      if (isNaN(amount)) {
+        result.innerHTML = "Please enter a number";
+        return;
+      }
+
+      // convert to kg first, then to the unit we want
+      var inKg = amount * toKg[from];
+      var answer = inKg / toKg[to];
+
+      result.innerHTML = amount + " " + from + " = " + answer.toFixed(4) + " " + to;
+    }
+  </script>
+</body>
+</html>
