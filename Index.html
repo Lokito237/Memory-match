@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Memory Match</title>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#e8eef4; --panel:#ffffff; --text:#14213d; --muted:#5b6b82;
+  --tile:#2b4c7e; --tile-edge:#1d3557; --face:#fdfdfb; --match:#c8f0d4; --match-edge:#3a9d5d;
+  --accent:#f4a259; --accent-text:#14213d;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1724; --panel:#18233a; --text:#e8eef7; --muted:#9aabc4;
+    --tile:#3f66a6; --tile-edge:#26416d; --face:#223250; --match:#1f4a33; --match-edge:#5fd08a;
+    --accent:#f4a259; --accent-text:#14213d; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1724; --panel:#18233a; --text:#e8eef7; --muted:#9aabc4;
+  --tile:#3f66a6; --tile-edge:#26416d; --face:#223250; --match:#1f4a33; --match-edge:#5fd08a;
+  --accent:#f4a259; --accent-text:#14213d; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;min-height:100vh}
+main{max-width:480px;margin:0 auto;padding:20px 16px 32px}
+h1{font-size:1.7rem;margin:0 0 4px;letter-spacing:.01em}
+p.sub{margin:0 0 16px;color:var(--muted);line-height:1.4}
+.stats{display:flex;gap:8px;margin-bottom:14px}
+.stat{flex:1;background:var(--panel);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:1.25rem;font-variant-numeric:tabular-nums}
+.stat span{font-size:.8rem;color:var(--muted)}
+#board{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.card{aspect-ratio:1;border:0;padding:0;background:none;perspective:600px;cursor:pointer;font:inherit}
+.card:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:12px}
+.inner{position:relative;width:100%;height:100%;transition:transform .35s;transform-style:preserve-3d}
+.card.open .inner,.card.matched .inner{transform:rotateY(180deg)}
+.side{position:absolute;inset:0;border-radius:12px;display:grid;place-items:center;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.back{background:var(--tile);border-bottom:4px solid var(--tile-edge)}
+.back::after{content:"?";color:rgba(255,255,255,.55);font-size:1.6rem;font-weight:700}
+.front{background:var(--face);transform:rotateY(180deg);font-size:2rem;border:2px solid var(--tile-edge)}
+.card.matched .front{background:var(--match);border-color:var(--match-edge)}
+.card.matched{cursor:default}
+.actions{display:flex;gap:10px;margin-top:16px}
+button.btn{flex:1;border:0;border-radius:10px;padding:12px;font:inherit;font-weight:700;background:var(--accent);color:var(--accent-text);cursor:pointer}
+button.btn.alt{background:var(--panel);color:var(--text)}
+button.btn:focus-visible{outline:3px solid var(--text);outline-offset:2px}
+#msg{min-height:1.5em;margin-top:14px;font-weight:700;text-align:center}
+@media (prefers-reduced-motion: reduce){.inner{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Memory Match</h1>
+  <p class="sub">Flip two tiles at a time. Find all 8 pairs in as few moves as you can.</p>
+  <div class="stats">
+    <div class="stat"><b id="moves">0</b><span>Moves</span></div>
+    <div class="stat"><b id="time">0s</b><span>Time</span></div>
+    <div class="stat"><b id="best">-</b><span>Best moves</span></div>
+  </div>
+  <div id="board" role="grid" aria-label="Memory cards"></div>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="actions">
+    <button class="btn" id="restart">New game</button>
+  </div>
+</main>
+<script>
+(function () {
+  var SYMBOLS = ["🍎","🚀","🐙","🎸","🌵","🦊","⚽","🍩"];
+  var board = document.getElementById("board");
+  var movesEl = document.getElementById("moves");
+  var timeEl = document.getElementById("time");
+  var bestEl = document.getElementById("best");
+  var msgEl = document.getElementById("msg");
+
+  var first = null, lock = false, moves = 0, matched = 0;
+  var seconds = 0, timer = null, started = false;
+
+  function getBest() {
+    try { var v = localStorage.getItem("memory-best"); return v ? parseInt(v, 10) : null; }
+    catch (e) { return null; }
+  }
+  function setBest(n) {
+    try { localStorage.setItem("memory-best", String(n)); } catch (e) {}
+  }
+  function showBest() {
+    var b = getBest();
+    bestEl.textContent = b === null ? "-" : b;
+  }
+
+  // Fisher-Yates shuffle
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  function startTimer() {
+    started = true;
+    timer = setInterval(function () {
+      seconds++;
+      timeEl.textContent = seconds + "s";
+    }, 1000);
+  }
+
+  function newGame() {
+    clearInterval(timer);
+    first = null; lock = false; moves = 0; matched = 0;
+    seconds = 0; started = false;
+    movesEl.textContent = "0";
+    timeEl.textContent = "0s";
+    msgEl.textContent = "";
+    board.innerHTML = "";
+    showBest();
+
+    var deck = shuffle(SYMBOLS.concat(SYMBOLS));
+    deck.forEach(function (sym) {
+      var btn = document.createElement("button");
+      btn.className = "card";
+      btn.type = "button";
+      btn.dataset.symbol = sym;
+      btn.setAttribute("aria-label", "Hidden card");
+      btn.innerHTML = '<div class="inner"><div class="side back"></div><div class="side front">' + sym + '</div></div>';
+      btn.addEventListener("click", function () { flip(btn); });
+      board.appendChild(btn);
+    });
+  }
+
+  function flip(card) {
+    if (lock || card.classList.contains("open") || card.classList.contains("matched")) return;
+    if (!started) startTimer();
+
+    card.classList.add("open");
+    card.setAttribute("aria-label", "Card " + card.dataset.symbol);
+
+    if (!first) { first = card; return; }
+
+    moves++;
+    movesEl.textContent = moves;
+    var second = card;
+
+    if (first.dataset.symbol === second.dataset.symbol) {
+      first.classList.add("matched"); second.classList.add("matched");
+      first = null; matched++;
+      if (matched === SYMBOLS.length) win();
+    } else {
+      lock = true;
+      var a = first; first = null;
+      setTimeout(function () {
+        a.classList.remove("open"); second.classList.remove("open");
+        a.setAttribute("aria-label", "Hidden card");
+        second.setAttribute("aria-label", "Hidden card");
+        lock = false;
+      }, 800);
+    }
+  }
+
+  function win() {
+    clearInterval(timer);
+    var best = getBest();
+    var text = "You won in " + moves + " moves and " + seconds + "s.";
+    if (best === null || moves < best) { setBest(moves); text += " New best!"; showBest(); }
+    msgEl.textContent = text;
+  }
+
+  document.getElementById("restart").addEventListener("click", newGame);
+  newGame();
+})();
+</script>
+</body>
+</html>
